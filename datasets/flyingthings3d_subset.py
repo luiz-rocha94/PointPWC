@@ -1,7 +1,7 @@
 import sys, os
 import os.path as osp
 import numpy as np
-import pptk
+#import pptk
 
 import torch.utils.data as data
 

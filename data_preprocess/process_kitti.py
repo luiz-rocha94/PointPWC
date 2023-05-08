@@ -3,7 +3,7 @@ import os.path as osp
 import numpy as np
 from multiprocessing import Pool
 
-from kitti_utils import *
+from kitti_utils import load_disp, disp_2_depth, pixel2xyz, load_op_flow
 
 calib_root = './utils/calib_cam_to_cam/'
 data_root = sys.argv[1]
@@ -15,7 +15,7 @@ save_path = sys.argv[2]
 
 
 def process_one_frame(idx):
-    sidx = '{:06d}'.format(idx)
+    sidx = str(idx).zfill(6)
 
     calib_path = osp.join(calib_root, sidx + '.txt')
     with open(calib_path) as fd:

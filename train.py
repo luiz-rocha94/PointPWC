@@ -10,6 +10,7 @@ import os
 
 import torch, numpy as np, glob, math, torch.utils.data, scipy.ndimage, multiprocessing as mp
 import torch.nn.functional as F
+from tensorboardX import SummaryWriter
 import time
 import pickle 
 import datetime
@@ -39,12 +40,13 @@ def main():
     '''CREATE DIR'''
     experiment_dir = Path('./experiment/')
     experiment_dir.mkdir(exist_ok=True)
-    file_dir = Path(str(experiment_dir) + '/PointConv%sFlyingthings3d-'%args.model_name + str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')))
+    file_dir = Path(str(experiment_dir) + '/PointConv%s-'%args.model_name + str(datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')))
     file_dir.mkdir(exist_ok=True)
     checkpoints_dir = file_dir.joinpath('checkpoints/')
     checkpoints_dir.mkdir(exist_ok=True)
     log_dir = file_dir.joinpath('logs/')
     log_dir.mkdir(exist_ok=True)
+    tb_log = SummaryWriter(log_dir=str(file_dir / 'tensorboard'))
     os.system('cp %s %s' % ('models.py', log_dir))
     os.system('cp %s %s' % ('pointconv_util.py', log_dir))
     os.system('cp %s %s' % ('train.py', log_dir))
@@ -73,7 +75,7 @@ def main():
                                             args.num_points),
         num_points=args.num_points,
         data_root = args.data_root,
-        full=args.full
+        #full=args.full
     )
     logger.info('train_dataset: ' + str(train_dataset))
     train_loader = torch.utils.data.DataLoader(
@@ -157,6 +159,7 @@ def main():
             pred_flows, fps_pc1_idxs, _, _, _ = model(pos1, pos2, norm1, norm2)
 
             loss = multiScaleLoss(pred_flows, flow, fps_pc1_idxs)
+            epe3d = torch.norm(pred_flows[0].permute(0, 2, 1) - flow, dim=2).mean()
 
             history['loss'].append(loss.cpu().data.numpy())
             loss.backward()
@@ -165,6 +168,10 @@ def main():
 
             total_loss += loss.cpu().data * args.batch_size
             total_seen += args.batch_size
+
+            tb_log.add_scalar('train/loss', loss, epoch*len(train_loader) + i)
+            tb_log.add_scalar('train/epe3d', epe3d, epoch * len(train_loader) + i)
+            tb_log.add_scalar('meta_data/learning_rate', lr, epoch*len(train_loader) + i)
 
         scheduler.step()
 

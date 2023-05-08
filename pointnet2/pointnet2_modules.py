@@ -1,10 +1,10 @@
+from typing import List
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from . import pointnet2_utils
-from . import pytorch_utils as pt_utils
-from typing import List
 
 
 class _PointnetSAModuleBase(nn.Module):
@@ -31,7 +31,7 @@ class _PointnetSAModuleBase(nn.Module):
         if new_xyz is None:
             new_xyz = pointnet2_utils.gather_operation(
                 xyz_flipped,
-                pointnet2_utils.furthest_point_sample(xyz, self.npoint)
+                pointnet2_utils.farthest_point_sample(xyz, self.npoint)
             ).transpose(1, 2).contiguous() if self.npoint is not None else None
 
         for i in range(len(self.groupers)):
@@ -59,7 +59,7 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):
     """Pointnet set abstraction layer with multiscale grouping"""
 
     def __init__(self, *, npoint: int, radii: List[float], nsamples: List[int], mlps: List[List[int]], bn: bool = True,
-                 use_xyz: bool = True, pool_method='max_pool', instance_norm=False):
+                 use_xyz: bool = True, pool_method='max_pool'):
         """
         :param npoint: int
         :param radii: list of float, list of radii to group with
@@ -68,7 +68,6 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):
         :param bn: whether to use batchnorm
         :param use_xyz:
         :param pool_method: max_pool / avg_pool
-        :param instance_norm: whether to use instance_norm
         """
         super().__init__()
 
@@ -88,7 +87,15 @@ class PointnetSAModuleMSG(_PointnetSAModuleBase):
             if use_xyz:
                 mlp_spec[0] += 3
 
-            self.mlps.append(pt_utils.SharedMLP(mlp_spec, bn=bn, instance_norm=instance_norm))
+            shared_mlps = []
+            for k in range(len(mlp_spec) - 1):
+                shared_mlps.extend([
+                    nn.Conv2d(mlp_spec[k], mlp_spec[k + 1], kernel_size=1, bias=False),
+                    nn.BatchNorm2d(mlp_spec[k + 1]),
+                    nn.ReLU()
+                ])
+            self.mlps.append(nn.Sequential(*shared_mlps))
+
         self.pool_method = pool_method
 
 
@@ -96,7 +103,7 @@ class PointnetSAModule(PointnetSAModuleMSG):
     """Pointnet set abstraction layer"""
 
     def __init__(self, *, mlp: List[int], npoint: int = None, radius: float = None, nsample: int = None,
-                 bn: bool = True, use_xyz: bool = True, pool_method='max_pool', instance_norm=False):
+                 bn: bool = True, use_xyz: bool = True, pool_method='max_pool'):
         """
         :param mlp: list of int, spec of the pointnet before the global max_pool
         :param npoint: int, number of features
@@ -105,11 +112,10 @@ class PointnetSAModule(PointnetSAModuleMSG):
         :param bn: whether to use batchnorm
         :param use_xyz:
         :param pool_method: max_pool / avg_pool
-        :param instance_norm: whether to use instance_norm
         """
         super().__init__(
             mlps=[mlp], npoint=npoint, radii=[radius], nsamples=[nsample], bn=bn, use_xyz=use_xyz,
-            pool_method=pool_method, instance_norm=instance_norm
+            pool_method=pool_method
         )
 
 
@@ -122,7 +128,15 @@ class PointnetFPModule(nn.Module):
         :param bn: whether to use batchnorm
         """
         super().__init__()
-        self.mlp = pt_utils.SharedMLP(mlp, bn=bn)
+
+        shared_mlps = []
+        for k in range(len(mlp) - 1):
+            shared_mlps.extend([
+                nn.Conv2d(mlp[k], mlp[k + 1], kernel_size=1, bias=False),
+                nn.BatchNorm2d(mlp[k + 1]),
+                nn.ReLU()
+            ])
+        self.mlp = nn.Sequential(*shared_mlps)
 
     def forward(
             self, unknown: torch.Tensor, known: torch.Tensor, unknow_feats: torch.Tensor, known_feats: torch.Tensor

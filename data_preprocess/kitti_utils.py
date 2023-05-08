@@ -1,5 +1,5 @@
 import numpy as np
-import png
+import cv2
 
 
 def pixel2xyz(depth, P_rect, px=None, py=None):
@@ -27,12 +27,9 @@ def pixel2xyz(depth, P_rect, px=None, py=None):
 
 
 def load_uint16PNG(fpath):
-    reader = png.Reader(fpath)
-    pngdata = reader.read()
-    px_array = np.vstack( map(np.uint16, pngdata[2]) )
-    if pngdata[3]['planes'] == 3:
-        width, height = pngdata[:2]
-        px_array = px_array.reshape(height, width, 3)
+    px_array = cv2.imread(fpath, cv2.IMREAD_UNCHANGED).astype(np.uint16)
+    if len(px_array.shape) == 3:
+        px_array = px_array[:, :, [2, 1, 0]]
     return px_array
 
 

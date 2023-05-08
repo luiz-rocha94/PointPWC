@@ -10,8 +10,8 @@ last_relu: False
 allow_less_points: False
 
 # general args
-batch_size: 8
-epochs: 800
+batch_size: 2
+epochs: 20
 learning_rate: 0.001
 
 optimizer: Adam
@@ -25,8 +25,8 @@ DEVICE: cuda
 
 evaluate: False
 
-dataset: FlyingThings3DSubset 
-data_root: ./flyingthings3d
+dataset: KITTI
+data_root: ./SAVE_PATH
 
 data_process:
   DEPTH_THRESHOLD: 35.
